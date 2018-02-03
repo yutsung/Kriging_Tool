@@ -27,7 +27,7 @@ def count_runtime(func):
 
 
 def exp_model(s, d, l):
-    return s**2 * (1 - np.exp(-d/l))
+    return np.power(s, 2) * (1 - np.exp(-d/l))
 
 
 @count_runtime
@@ -96,23 +96,23 @@ def fit_semivariance(x, y, fit_model):
 
 
 @count_runtime
-def do_blue(lon, lat, z, ilon, ilat, param, fit_model):
+def do_blue(lon, lat, z, ilon_list, ilat_list, param, fit_model):
     """Best Linear Unbiased Estimation
     """
 
+    if np.size(ilon_list) == 1:
+        ilon_list = [ilon_list]
+        ilat_list = [ilat_list]
+    ivalue = np.zeros((np.size(ilon_list))) * np.nan
+
     A = np.asmatrix(np.zeros((len(z)+1, len(z)+1)))
-    Gamma = np.asmatrix(np.zeros((len(z)+1, 1)))
     A[:, -1] = 1
     A[-1, :] = 1
     A[-1, -1] = 0
-    Gamma[-1, 0] = 1
 
     if fit_model == 'exponential':
         
         for i in range(len(z)):
-            d_i0 = haversine(lon[i], ilon, lat[i], ilat)
-            gamma_d_i0 = exp_model(param[0], d_i0 ,param[1])
-            Gamma[i, 0] = gamma_d_i0
             d_ij = haversine(
                 np.repeat(lon[i], len(z)), 
                 lon[:], 
@@ -122,13 +122,30 @@ def do_blue(lon, lat, z, ilon, ilat, param, fit_model):
             gamma_d_ij = exp_model(param[0], d_ij, param[1])
             A[i, :-1] = gamma_d_ij
     
-    Lambda = A.I * Gamma
-    ivalue = np.sum( np.asarray(Lambda.T) * np.append(z, 1) )
+    for ipoint, (ilon, ilat) in enumerate(zip(ilon_list, ilat_list)):
+        print(ilon)
+        print(ilat)
+        Gamma = np.asmatrix(np.zeros((len(z)+1, 1)))
+        Gamma[-1, 0] = 1
+        for i in range(len(z)):
+            d_i0 = haversine(lon[i], ilon, lat[i], ilat)
+            gamma_d_i0 = exp_model(param[0], d_i0 ,param[1])
+            Gamma[i, 0] = gamma_d_i0
+
+        Lambda = A.I * Gamma
+        ivalue[ipoint] = np.sum( np.asarray(Lambda.T) * np.append(z, 1) )
 
     return ivalue
 
 
-def ordinary_kriging(lon, lat, z, ilon, ilat, fit_model='exponential'):
+def ordinary_kriging(
+        lon, 
+        lat, 
+        z, 
+        ilon_list, 
+        ilat_list, 
+        fit_model='exponential'
+    ):
     
     dis, zdif, dis_ma, zdif_ma = semivariance_lonlat(lon, lat, z)
    
@@ -143,9 +160,17 @@ def ordinary_kriging(lon, lat, z, ilon, ilat, fit_model='exponential'):
         exp_model(param[0], np.arange(0, np.max(dis_ma)), param[1]), 
         'b-'
     )
-    #plt.show()
+    plt.savefig('semivar.png')
 
-    ivalue = do_blue(lon, lat, z, ilon, ilat, param, fit_model=fit_model)
+    ivalue = do_blue(
+        lon, 
+        lat, 
+        z, 
+        ilon_list, 
+        ilat_list, 
+        param, 
+        fit_model=fit_model
+    )
     
     return ivalue
     
