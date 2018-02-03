@@ -1,6 +1,8 @@
-#!
+#!/usr/local/bin/python3
 """
 """
+import datetime
+from functools import wraps
 
 import numpy as np
 from scipy.special import comb
@@ -8,22 +10,37 @@ from scipy.special import comb
 from .geocoordinate import earth_radius, haversine
 
 
+def count_runtime(func):
+    @wraps(func)
+    def with_runtime(*args, **kwargs):
+        starttime = datetime.datetime.now()
+        out_func = func(*args, **kwargs)
+        endtime = datetime.datetime.now()
+        print(
+            '{}, runtime: {}'.format(
+                func.__name__,
+                endtime - starttime
+            )
+        )
+        return out_func
+    return with_runtime
+
+
 def exp_model(s, d, l):
     return s**2 * (1 - np.exp(-d/l))
 
 
+@count_runtime
 def semivariance_lonlat(x, y, z):
     dis = np.zeros(int(comb(np.size(z), 2))) * np.nan
     zdif = np.zeros(int(comb(np.size(z), 2))) * np.nan
 
     k = 0
-    for i, zi in enumerate(z):
-        for j, zj in enumerate(z):
-            if i <= j:
-                continue
-            dis[k] = haversine(x[i], x[j], y[i], y[j])
-            zdif[k] = 0.5 * (zi - zj)**2
-            k += 1
+    for i ,zi in enumerate(z[1:], 1):
+        dis[k:k+i] = haversine(np.repeat(x[i], i), x[:i], np.repeat(y[i], i), y[:i])
+        zdif[k:k+i] = 0.5 * np.power(zi - z[:i], 2)
+        k += i
+
 
     zdif = [zdifi for _, zdifi in sorted(zip(dis, zdif))]
     dis = sorted(dis)
@@ -31,7 +48,6 @@ def semivariance_lonlat(x, y, z):
     dis = np.array(dis)
 
     step = (max(dis) /2 / 20)
-    #step = (max(dis) / 20)
     dis_ma = []
     zdif_ma = []
     for i in range(20):
@@ -46,6 +62,7 @@ def semivariance_lonlat(x, y, z):
     return dis, zdif, dis_ma, zdif_ma
 
 
+@count_runtime
 def fit_semivariance(x, y, fit_model):
 
     param = []
@@ -77,26 +94,59 @@ def fit_semivariance(x, y, fit_model):
 
     return param
 
+
+@count_runtime
+def do_blue(lon, lat, z, ilon, ilat, param, fit_model):
+    """Best Linear Unbiased Estimation
+    """
+
+    A = np.asmatrix(np.zeros((len(z)+1, len(z)+1)))
+    Gamma = np.asmatrix(np.zeros((len(z)+1, 1)))
+    A[:, -1] = 1
+    A[-1, :] = 1
+    A[-1, -1] = 0
+    Gamma[-1, 0] = 1
+
+    if fit_model == 'exponential':
+        
+        for i in range(len(z)):
+            d_i0 = haversine(lon[i], ilon, lat[i], ilat)
+            gamma_d_i0 = exp_model(param[0], d_i0 ,param[1])
+            Gamma[i, 0] = gamma_d_i0
+            d_ij = haversine(
+                np.repeat(lon[i], len(z)), 
+                lon[:], 
+                np.repeat(lat[i], len(z)), 
+                lat[:]
+            )
+            gamma_d_ij = exp_model(param[0], d_ij, param[1])
+            A[i, :-1] = gamma_d_ij
+    
+    Lambda = A.I * Gamma
+    ivalue = np.sum( np.asarray(Lambda.T) * np.append(z, 1) )
+
+    return ivalue
+
+
 def ordinary_kriging(lon, lat, z, ilon, ilat, fit_model='exponential'):
     
     dis, zdif, dis_ma, zdif_ma = semivariance_lonlat(lon, lat, z)
    
     param = fit_semivariance(dis_ma, zdif_ma, fit_model)
 
-    #import matplotlib.pyplot as plt 
-    #fig, ax = plt.subplots()
-    #ax.scatter(dis, zdif, alpha=0.5)
-    #ax.plot(dis_ma, zdif_ma, 'r-')
-    #ax.plot(
-    #    np.arange(0, np.max(dis_ma)), 
-    #    exp_model(param[0], 
-    #    np.arange(0, np.max(dis_ma)), param[1]), 
-    #    'b-'
-    #)
+    import matplotlib.pyplot as plt 
+    fig, ax = plt.subplots()
+    ax.scatter(dis, zdif, alpha=0.5)
+    ax.plot(dis_ma, zdif_ma, 'r-')
+    ax.plot(
+        np.arange(0, np.max(dis_ma)), 
+        exp_model(param[0], np.arange(0, np.max(dis_ma)), param[1]), 
+        'b-'
+    )
     #plt.show()
 
+    ivalue = do_blue(lon, lat, z, ilon, ilat, param, fit_model=fit_model)
     
-    
-    
+    return ivalue
     
 
