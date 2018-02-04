@@ -123,8 +123,6 @@ def do_blue(lon, lat, z, ilon_list, ilat_list, param, fit_model):
             A[i, :-1] = gamma_d_ij
     
     for ipoint, (ilon, ilat) in enumerate(zip(ilon_list, ilat_list)):
-        print(ilon)
-        print(ilat)
         Gamma = np.asmatrix(np.zeros((len(z)+1, 1)))
         Gamma[-1, 0] = 1
         for i in range(len(z)):
@@ -151,16 +149,16 @@ def ordinary_kriging(
    
     param = fit_semivariance(dis_ma, zdif_ma, fit_model)
 
-    import matplotlib.pyplot as plt 
-    fig, ax = plt.subplots()
-    ax.scatter(dis, zdif, alpha=0.5)
-    ax.plot(dis_ma, zdif_ma, 'r-')
-    ax.plot(
-        np.arange(0, np.max(dis_ma)), 
-        exp_model(param[0], np.arange(0, np.max(dis_ma)), param[1]), 
-        'b-'
-    )
-    plt.savefig('semivar.png')
+    #import matplotlib.pyplot as plt 
+    #fig, ax = plt.subplots()
+    #ax.scatter(dis, zdif, alpha=0.5)
+    #ax.plot(dis_ma, zdif_ma, 'r-')
+    #ax.plot(
+    #    np.arange(0, np.max(dis_ma)), 
+    #    exp_model(param[0], np.arange(0, np.max(dis_ma)), param[1]), 
+    #    'b-'
+    #)
+    #plt.savefig('semivar.png')
 
     ivalue = do_blue(
         lon, 
